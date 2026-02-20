@@ -22,18 +22,39 @@ const Puzzle = mongoose.model('Puzzle', new mongoose.Schema({
   Themes: String
 }), 'puzzles');
 
-// When the game asks for a random puzzle, send one!
+// The upgraded randomizer that listens for difficulty!
 app.get('/random', async (req, res) => {
   try {
-    const puzzle = await Puzzle.aggregate([{ $sample: { size: 1 } }]);
-    res.json(puzzle[0]);
+    let matchStage = {}; // Default: Mixed (Any rating)
+    const diff = req.query.difficulty;
+    
+    // Sort by rating based on what the app asks for
+    if (diff === 'easy') {
+      matchStage = { Rating: { $lt: 1500 } };
+    } else if (diff === 'medium') {
+      matchStage = { Rating: { $gte: 1500, $lte: 2000 } };
+    } else if (diff === 'hard') {
+      matchStage = { Rating: { $gt: 2000 } };
+    }
+
+    const puzzle = await Puzzle.aggregate([
+      { $match: matchStage },
+      { $sample: { size: 1 } }
+    ]);
+    
+    if (puzzle.length > 0) {
+      res.json(puzzle[0]);
+    } else {
+      res.status(404).json({ error: "No puzzles found for this difficulty!" });
+    }
   } catch (err) { 
     res.status(500).json({ error: err.message }); 
   }
 });
 
-// Render gives the server a specific port, so we use process.env.PORT
+// Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server is live on port ${PORT}!`);
 });
+
